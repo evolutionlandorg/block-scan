@@ -1,14 +1,15 @@
 package block_scan
 
 import (
-	"block-scan/scan"
-	"block-scan/services"
-	"block-scan/subscribe"
-	"block-scan/util"
-	"block-scan/util/log"
 	"context"
 	"errors"
 	"time"
+
+	"github.com/evolutionlandorg/block-scan/scan"
+	"github.com/evolutionlandorg/block-scan/services"
+	"github.com/evolutionlandorg/block-scan/subscribe"
+	"github.com/evolutionlandorg/block-scan/util"
+	"github.com/evolutionlandorg/block-scan/util/log"
 )
 
 type ScanType string

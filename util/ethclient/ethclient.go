@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"block-scan/util/rpc"
+	"github.com/evolutionlandorg/block-scan/util/rpc"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"

@@ -1,9 +1,6 @@
 package subscribe
 
 import (
-	"block-scan/scan"
-	"block-scan/services"
-	"block-scan/util"
 	"context"
 	"fmt"
 	"math/big"
@@ -11,7 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"block-scan/util/ethclient"
+	"github.com/evolutionlandorg/block-scan/scan"
+	"github.com/evolutionlandorg/block-scan/services"
+	"github.com/evolutionlandorg/block-scan/util"
+
+	"github.com/evolutionlandorg/block-scan/util/ethclient"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"

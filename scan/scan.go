@@ -1,13 +1,14 @@
 package scan
 
 import (
-	"block-scan/services"
 	"context"
 	"fmt"
 	"strings"
 	"time"
 
-	"block-scan/util/log"
+	"github.com/evolutionlandorg/block-scan/services"
+
+	"github.com/evolutionlandorg/block-scan/util/log"
 
 	"github.com/garyburd/redigo/redis"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
@@ -74,6 +75,7 @@ func (p *Polling) Init(c services.ChainIo, cache services.GetCacheFunc, chain st
 	p.Chain = chain
 	p.SleepTime = sleepTime
 	p.GetCallbackFunc = getCallbackFunc
+	p.ChainIo = c
 	return nil
 }
 
@@ -94,7 +96,7 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 					newTxn <- txn
 					continue
 				}
-				p.ReceiptDistribution(txn.Tx, txn.BlockTimestamp, receipt)
+				_ = p.ReceiptDistribution(txn.Tx, txn.BlockTimestamp, receipt)
 			}
 		}
 	}()

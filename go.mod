@@ -1,4 +1,4 @@
-module block-scan
+module github.com/evolutionlandorg/block-scan
 
 go 1.17
 

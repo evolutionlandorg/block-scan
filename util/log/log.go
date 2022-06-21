@@ -1,13 +1,14 @@
 package log
 
 import (
-	"block-scan/util"
 	"fmt"
 	"io"
 	"os"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
+
+	"github.com/evolutionlandorg/block-scan/util"
 
 	"github.com/spf13/cast"
 	"go.uber.org/zap"

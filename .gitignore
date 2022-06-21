@@ -1,0 +1,17 @@
+.idea
+.gvm_local
+.cache
+end
+/log
+bin/*
+src/github.com/*
+tron.js
+node_modules
+src/pkg
+/tmp
+local
+# act 在本地运行 github Actions 需要github token 格式为 token=xxxx
+.secrets
+*.env
+.run
+script

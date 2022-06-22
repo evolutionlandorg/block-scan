@@ -54,8 +54,8 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 		Callback:       p.GetCallbackFunc(tx, BlockTimestamp, receipt),
 	}
 
-	for _, log := range receipt.Logs {
-		eventAddress := strings.ToLower(log.Address)
+	for _, l := range receipt.Logs {
+		eventAddress := strings.ToLower(l.Address)
 		if _, ok := exist[eventAddress]; ok {
 			continue
 		}
@@ -64,7 +64,7 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 			contractName := strings.ToLower(p.ContractsName[services.ContractsAddress(eventAddress)].String())
 			for _, v := range p.CallbackMethodPrefix {
 				if strings.EqualFold(v, contractName) {
-					fb.ContractName = contractName
+					fb.ContractName = v
 					_ = fb.Do()
 					break
 				}
@@ -109,7 +109,7 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 			}
 		}
 	}()
-
+	log.Debug("start %s wipeBlock", p.Chain)
 	var (
 		currentBlockNum uint64
 		ticker          = time.NewTicker(time.Second)
@@ -145,12 +145,11 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 		chainCurrentBlockNum = chainCurrentBlockNum - currentBlockNum
 		if currentBlockNum < chainCurrentBlockNum {
 			for i := currentBlockNum + 1; i <= chainCurrentBlockNum; i++ {
-				txIDs, contracts, blockTimeStamp, _ := p.ChainIo.FilterTrans(uint64(i), filterContracts)
+				txIDs, contracts, blockTimeStamp, transactionTo := p.ChainIo.FilterTrans(uint64(i), filterContracts)
 				if len(txIDs) == 0 {
 					continue
 				}
-
-				log.Debug("Chain %s, block %d, transaction contracts %v", p.Chain, i, contracts)
+				log.Debug("%s find tx id %v; transaction contracts %v", p.Chain, txIDs, transactionTo)
 				for index, txID := range txIDs {
 					newTxn <- services.Tnx{Tx: txID, BlockTimestamp: blockTimeStamp, Contract: contracts[index]}
 				}

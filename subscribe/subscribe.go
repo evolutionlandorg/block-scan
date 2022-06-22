@@ -11,6 +11,7 @@ import (
 	"github.com/evolutionlandorg/block-scan/scan"
 	"github.com/evolutionlandorg/block-scan/services"
 	"github.com/evolutionlandorg/block-scan/util"
+	"github.com/evolutionlandorg/block-scan/util/log"
 
 	"github.com/evolutionlandorg/block-scan/util/ethclient"
 
@@ -74,6 +75,7 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 		rawLogs, err := client.FilterLogs(ctx, *query)
 
 		if err != nil {
+			log.Warn("%s FilterLogs error: %v. trying again.", p.Chain, err)
 			continue
 		}
 
@@ -88,6 +90,7 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 					return client.BlockByNumber(ctx, big.NewInt(int64(v.BlockNumber)))
 				}, 10)
 				if err != nil {
+					log.Error("%s %s get block by number error: %s", p.Chain, tx, err)
 					continue
 				}
 				data[tx] = &Receipts{
@@ -113,6 +116,7 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 		for _, v := range data {
 			_ = p.ReceiptDistribution(v.Tx, v.Timestamp, v.Receipts)
 		}
+		log.Warn("%s %d-%d block high filter logs %d", p.Chain, startBlock, endBlock, len(data))
 		startBlock = endBlock
 		p.setCurrentBlockHeightToCache(ctx, p.Chain, startBlock)
 	}
@@ -137,6 +141,7 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 	}
 
 	query.FromBlock = big.NewInt(int64(p.filterLogs(ctx, currentBlockNum, client)))
+	log.Debug("%s start subscribe latest block info", p.Chain)
 	logs := make(chan types.Log)
 
 	sub, err := client.SubscribeFilterLogs(ctx, *query, logs)
@@ -156,6 +161,7 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 			if now-int64(v.Timestamp) < int64(waitTime.Seconds()) {
 				continue
 			}
+			log.Debug("%s push %s %d logs to queue", p.Chain, v.Tx, len(v.Logs))
 			_ = p.ReceiptDistribution(v.Tx, v.Timestamp, v.Receipts)
 			delete(data, key)
 			p.setCurrentBlockHeightToCache(ctx, p.Chain, cast.ToUint64(v.Receipts.BlockNumber))

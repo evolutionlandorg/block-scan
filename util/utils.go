@@ -3,6 +3,9 @@ package util
 import (
 	"encoding/hex"
 	"os"
+	"time"
+
+	"github.com/spf13/cast"
 )
 
 func Panic(err error) {
@@ -40,4 +43,20 @@ func GetEnv(key, defaultValue string) string {
 		value = defaultValue
 	}
 	return value
+}
+
+func GetSleepTime() time.Duration {
+	sleepTime := cast.ToUint64(GetEnv("BLOCK_POLLING_SLEEP_TIME", "2"))
+	if sleepTime <= 0 {
+		return 2
+	}
+	return time.Duration(sleepTime) * time.Second
+}
+
+func GetDelayTime() time.Duration {
+	sleepTime := cast.ToUint64(GetEnv("BLOCK_DELAY_SEND_TIME", "5"))
+	if sleepTime <= 0 {
+		return 5
+	}
+	return time.Duration(sleepTime) * time.Second
 }

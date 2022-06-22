@@ -149,8 +149,8 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 		return err
 	}
 
-	sleepTime := time.Second * 2
-	waitTime := time.Second * 5
+	sleepTime := util.GetSleepTime()
+	waitTime := util.GetDelayTime()
 	t := time.NewTicker(sleepTime)
 	defer t.Stop()
 

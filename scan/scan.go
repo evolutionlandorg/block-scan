@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/evolutionlandorg/block-scan/services"
+	"github.com/evolutionlandorg/block-scan/util"
 
 	"github.com/evolutionlandorg/block-scan/util/log"
 
@@ -25,8 +26,9 @@ type Polling struct {
 	GetCache             services.GetCacheFunc
 	ChainIo              services.ChainIo
 	Chain                string
-	SleepTime            time.Duration
-	GetCallbackFunc      services.GetCallbackFunc
+	// Deprecated 推荐使用 环境变量 BLOCK_POLLING_SLEEP_TIME
+	SleepTime       time.Duration
+	GetCallbackFunc services.GetCallbackFunc
 }
 
 func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt *services.Receipts) error {
@@ -118,7 +120,7 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 	for k := range p.ContractsName {
 		filterContracts = append(filterContracts, k.String())
 	}
-
+	sleepTime := util.GetSleepTime()
 	for {
 		select {
 		case <-ctx.Done():
@@ -159,6 +161,6 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 			_, _ = p.GetCache(spanCtx)("HSET", "WipeBlock", p.Chain, currentBlockNum)
 		}
 		span.Finish()
-		time.Sleep(p.SleepTime)
+		time.Sleep(sleepTime)
 	}
 }

@@ -77,7 +77,8 @@ func (f *FakeCallback) FakeCallback(ctx context.Context) error {
 
 func TestStartScanChainEvents(t *testing.T) {
 	f := new(FakeCallback)
-	ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 	assert.NoError(t, StartScanChainEvents(ctx, POLLING, &StartScanChainEventsOptions{
 		ChainIo: new(MockChainIo),
 		Cache: func(ctx context.Context) services.CacheFunc {

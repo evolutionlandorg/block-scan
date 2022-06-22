@@ -20,12 +20,13 @@ var (
 )
 
 type Polling struct {
-	ContractsName   map[services.ContractsAddress]services.ContractsName
-	GetCache        services.GetCacheFunc
-	ChainIo         services.ChainIo
-	Chain           string
-	SleepTime       time.Duration
-	GetCallbackFunc services.GetCallbackFunc
+	ContractsName        map[services.ContractsAddress]services.ContractsName
+	CallbackMethodPrefix []string
+	GetCache             services.GetCacheFunc
+	ChainIo              services.ChainIo
+	Chain                string
+	SleepTime            time.Duration
+	GetCallbackFunc      services.GetCallbackFunc
 }
 
 func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt *services.Receipts) error {
@@ -54,28 +55,36 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 	}
 
 	for _, log := range receipt.Logs {
-		fb.ContractName = ""
 		eventAddress := strings.ToLower(log.Address)
 		if _, ok := exist[eventAddress]; ok {
 			continue
 		}
 		exist[eventAddress] = struct{}{}
 		if p.ContractsName[services.ContractsAddress(eventAddress)] != "" {
-			fb.ContractName = strings.ToLower(p.ContractsName[services.ContractsAddress(eventAddress)].String())
-			_ = fb.Do()
+			contractName := strings.ToLower(p.ContractsName[services.ContractsAddress(eventAddress)].String())
+			for _, v := range p.CallbackMethodPrefix {
+				if strings.EqualFold(v, contractName) {
+					fb.ContractName = contractName
+					_ = fb.Do()
+					break
+				}
+			}
+
 		}
 	}
 	return nil
 }
 
 func (p *Polling) Init(c services.ChainIo, cache services.GetCacheFunc, chain string,
-	contractsName map[services.ContractsAddress]services.ContractsName, sleepTime time.Duration, getCallbackFunc services.GetCallbackFunc) error {
+	contractsName map[services.ContractsAddress]services.ContractsName, sleepTime time.Duration,
+	getCallbackFunc services.GetCallbackFunc, callbackMethodPrefix []string) error {
 	p.GetCache = cache
 	p.ContractsName = contractsName
 	p.Chain = chain
 	p.SleepTime = sleepTime
 	p.GetCallbackFunc = getCallbackFunc
 	p.ChainIo = c
+	p.CallbackMethodPrefix = callbackMethodPrefix
 	return nil
 }
 

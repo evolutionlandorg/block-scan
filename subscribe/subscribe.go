@@ -34,11 +34,11 @@ type Subscribe struct {
 }
 
 func (p *Subscribe) Init(c services.ChainIo, cache services.GetCacheFunc, chain string,
-	contractsName map[services.ContractsAddress]services.ContractsName, sleepTime time.Duration, getCallbackFunc services.GetCallbackFunc) error {
+	contractsName map[services.ContractsAddress]services.ContractsName, sleepTime time.Duration, getCallbackFunc services.GetCallbackFunc, callbackMethodPrefix []string) error {
 	if p.Polling == nil {
 		p.Polling = new(scan.Polling)
 	}
-	if err := p.Polling.Init(c, cache, chain, contractsName, sleepTime, getCallbackFunc); err != nil {
+	if err := p.Polling.Init(c, cache, chain, contractsName, sleepTime, getCallbackFunc, callbackMethodPrefix); err != nil {
 		return err
 	}
 	wss := os.Getenv(fmt.Sprintf("%s_WSS_RPC", strings.ToUpper(p.Chain)))

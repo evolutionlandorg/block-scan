@@ -58,7 +58,7 @@ type BlockHeader struct {
 }
 
 type Scan interface {
-	Init(c ChainIo, cache GetCacheFunc, chain string, contractsName map[ContractsAddress]ContractsName, sleepTime time.Duration, getCallbackFunc GetCallbackFunc) error
+	Init(c ChainIo, cache GetCacheFunc, chain string, contractsName map[ContractsAddress]ContractsName, sleepTime time.Duration, getCallbackFunc GetCallbackFunc, callbackMethodPrefix []string) error
 	WipeBlock(ctx context.Context, initBlock uint64) error
 }
 

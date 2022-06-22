@@ -119,11 +119,9 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 }
 
 func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
-	var filterContracts []string
 	query := new(ethereum.FilterQuery)
 	for k := range p.ContractsName {
 		contractsAddress := strings.ToLower(k.String())
-		filterContracts = append(filterContracts, contractsAddress)
 		query.Addresses = append(query.Addresses, common.HexToAddress(contractsAddress))
 	}
 

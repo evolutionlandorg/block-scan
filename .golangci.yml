@@ -1,0 +1,10 @@
+run:
+  skip-dirs:
+    - util/rpc
+    - util/ethclient
+
+linters-settings:
+  nolintlint:
+    allow-unused: false
+
+

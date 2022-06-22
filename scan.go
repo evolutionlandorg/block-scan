@@ -20,14 +20,15 @@ var (
 )
 
 type StartScanChainEventsOptions struct {
-	ChainIo         services.ChainIo
-	Cache           services.GetCacheFunc
-	Chain           string
-	ContractsName   map[services.ContractsAddress]services.ContractsName
-	SleepTime       time.Duration
-	GetCallbackFunc services.GetCallbackFunc
-	InitBlock       uint64
-	RunForever      bool
+	ChainIo              services.ChainIo
+	Cache                services.GetCacheFunc
+	Chain                string
+	ContractsName        map[services.ContractsAddress]services.ContractsName
+	SleepTime            time.Duration
+	GetCallbackFunc      services.GetCallbackFunc
+	CallbackMethodPrefix []string
+	InitBlock            uint64
+	RunForever           bool
 }
 
 func (s *StartScanChainEventsOptions) Check() error {
@@ -65,7 +66,7 @@ func StartScanChainEvents(ctx context.Context, scanType ScanType, opt *StartScan
 	if err := opt.Check(); err != nil {
 		return err
 	}
-	if err := instance.Init(opt.ChainIo, opt.Cache, opt.Chain, opt.ContractsName, opt.SleepTime, opt.GetCallbackFunc); err != nil {
+	if err := instance.Init(opt.ChainIo, opt.Cache, opt.Chain, opt.ContractsName, opt.SleepTime, opt.GetCallbackFunc, opt.CallbackMethodPrefix); err != nil {
 		return err
 	}
 	if opt.RunForever {

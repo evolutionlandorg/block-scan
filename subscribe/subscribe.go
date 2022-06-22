@@ -158,6 +158,7 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 			if now-int64(v.Timestamp) < int64(waitTime.Seconds()) {
 				continue
 			}
+			_ = p.ReceiptDistribution(v.Tx, v.Timestamp, v.Receipts)
 			delete(data, key)
 			p.setCurrentBlockHeightToCache(ctx, p.Chain, cast.ToUint64(v.Receipts.BlockNumber))
 		}

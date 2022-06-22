@@ -50,7 +50,7 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 		Txid:           tx,
 		Receipts:       receipt,
 		BlockTimestamp: BlockTimestamp,
-		Callback:       p.GetCallbackFunc(tx, receipt),
+		Callback:       p.GetCallbackFunc(tx, BlockTimestamp, receipt),
 	}
 
 	for _, log := range receipt.Logs {

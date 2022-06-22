@@ -18,7 +18,7 @@ type (
 	ContractsName    string
 )
 
-type GetCallbackFunc func(tx string, receipt *Receipts) interface{}
+type GetCallbackFunc func(tx string, blockTimestamp uint64, receipt *Receipts) interface{}
 
 type ChainIo interface {
 	ReceiptLog(tx string) (*Receipts, error)

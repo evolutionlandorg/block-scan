@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/evolutionlandorg/block-scan/util/log"
 	"github.com/google/uuid"
 	"github.com/itering/go-workers"
 )
@@ -106,5 +107,15 @@ func (fb *FilterBlock) TronSolidityProcess() {
 	}
 	ecInstant := fb.Callback
 	wReflect := reflect.ValueOf(&ecInstant).Elem()
-	wReflect.MethodByName(fb.ContractName + "Callback").Call(nil)
+	methodName := fmt.Sprintf("%sCallback", fb.ContractName)
+	methodFunc := wReflect.MethodByName(methodName)
+	if !methodFunc.IsValid() {
+		return
+	}
+	res := methodFunc.Call([]reflect.Value{reflect.ValueOf(context.Background())})
+	if v := res[0].Interface(); v != nil {
+		if err, ok := v.(error); ok && !strings.EqualFold(err.Error(), "tx exist") {
+			log.DPanic("Process error. %s", err)
+		}
+	}
 }

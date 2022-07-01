@@ -37,7 +37,7 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 
 	for index, v := range receipt.Logs {
 		eventAddress := strings.ToLower(v.Address)
-		key := fmt.Sprintf("%s_%s", eventAddress, v.Data)
+		key := fmt.Sprintf("%s_%s_%s", eventAddress, v.Data, strings.Join(v.Topics, ""))
 		if _, ok := exist[key]; ok {
 			continue
 		}

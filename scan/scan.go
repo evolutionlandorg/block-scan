@@ -144,7 +144,6 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 		if currentBlockNum <= 0 {
 			currentBlockNum = initBlock
 		}
-		chainCurrentBlockNum = chainCurrentBlockNum - currentBlockNum
 
 		if currentBlockNum < chainCurrentBlockNum {
 			for i := currentBlockNum + 1; i <= chainCurrentBlockNum; i++ {

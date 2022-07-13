@@ -48,7 +48,7 @@ func GetEnv(key, defaultValue string) string {
 func GetSleepTime() time.Duration {
 	sleepTime := cast.ToUint64(GetEnv("BLOCK_POLLING_SLEEP_TIME", "2"))
 	if sleepTime <= 0 {
-		return 2
+		return time.Duration(2) * time.Second
 	}
 	return time.Duration(sleepTime) * time.Second
 }
@@ -56,7 +56,7 @@ func GetSleepTime() time.Duration {
 func GetDelayTime() time.Duration {
 	sleepTime := cast.ToUint64(GetEnv("BLOCK_DELAY_SEND_TIME", "5"))
 	if sleepTime <= 0 {
-		return 5
+		return time.Duration(5) * time.Second
 	}
 	return time.Duration(sleepTime) * time.Second
 }

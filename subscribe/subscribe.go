@@ -113,6 +113,7 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 			data[v.Tx].Receipts = result.(*services.Receipts)
 			if p.RunBeforePushMiddleware(v.Tx, v.Timestamp, data[v.Tx].Receipts) {
 				_ = p.ReceiptDistribution(v.Tx, v.Timestamp, data[v.Tx].Receipts)
+				p.Opt.SetStartBlock(cast.ToUint64(v.Receipts.BlockNumber))
 			}
 		}
 		log.Warn("%s %d-%d block high filter logs %d", p.Opt.Chain, startBlock, endBlock, len(data))

@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/garyburd/redigo/redis"
 	"github.com/spf13/cast"
 )
 
@@ -34,25 +33,21 @@ type Subscribe struct {
 	wss string
 }
 
-func (p *Subscribe) Init(c services.ChainIo, cache services.GetCacheFunc, chain string,
-	contractsName map[services.ContractsAddress]services.ContractsName, sleepTime time.Duration, getCallbackFunc services.GetCallbackFunc, callbackMethodPrefix []string) error {
+func (p *Subscribe) Init(opt services.ScanEventsOptions) error {
 	if p.Polling == nil {
 		p.Polling = new(scan.Polling)
 	}
-	if err := p.Polling.Init(c, cache, chain, contractsName, sleepTime, getCallbackFunc, callbackMethodPrefix); err != nil {
-		return err
-	}
-	wss := os.Getenv(fmt.Sprintf("%s_WSS_RPC", strings.ToUpper(p.Chain)))
+	wss := os.Getenv(fmt.Sprintf("%s_WSS_RPC", strings.ToUpper(opt.Chain)))
 	if !strings.HasPrefix(wss, "ws") || wss == "" {
-		return fmt.Errorf("check if %s_WSS_RPC is a valid websocket connection", strings.ToUpper(p.Chain))
+		return fmt.Errorf("check if %s_WSS_RPC is a valid websocket connection", strings.ToUpper(opt.Chain))
 	}
 	p.wss = wss
-	return nil
+	return p.Polling.Init(opt)
 }
 
 func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *ethclient.Client) uint64 {
 	query := new(ethereum.FilterQuery)
-	for k := range p.ContractsName {
+	for k := range p.Opt.ContractsName {
 		contractsAddress := strings.ToLower(k.String())
 		query.Addresses = append(query.Addresses, common.HexToAddress(contractsAddress))
 	}
@@ -75,56 +70,59 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 		rawLogs, err := client.FilterLogs(ctx, *query)
 
 		if err != nil {
-			log.Warn("%s FilterLogs error: %v. trying again.", p.Chain, err)
+			log.Warn("%s FilterLogs error: %v. trying again.", p.Opt.Chain, err)
 			continue
 		}
 
 		var (
-			data = make(map[string]*Receipts)
+			data        = make(map[string]*Receipts)
+			blockNumber = make(map[uint64]uint64)
 		)
 
 		for _, v := range rawLogs {
 			tx := v.TxHash.Hex()
-			if _, ok := data[tx]; !ok {
+			if _, ok := blockNumber[v.BlockNumber]; !ok {
 				result, err := util.TryReturn(func() (result interface{}, err error) {
 					return client.BlockByNumber(ctx, big.NewInt(int64(v.BlockNumber)))
 				}, 10)
 				if err != nil {
-					log.Error("%s %s get block by number error: %s", p.Chain, tx, err)
+					log.Error("%s %s get block by number error: %s", p.Opt.Chain, tx, err)
 					continue
 				}
+				blockNumber[v.BlockNumber] = result.(*types.Block).Time()
+			}
+			if _, ok := data[tx]; !ok {
 				data[tx] = &Receipts{
-					Receipts: &services.Receipts{
-						Status:      "0x01",
-						ChainSource: p.Chain,
-						Solidity:    true,
-						BlockHash:   v.BlockHash.Hex(),
-						BlockNumber: cast.ToString(v.BlockNumber),
-					},
 					Tx:          v.TxHash.Hex(),
-					Timestamp:   result.(*types.Block).Time(),
+					Timestamp:   blockNumber[v.BlockNumber],
 					BlockNumber: v.BlockNumber,
 				}
 			}
+		}
 
-			l := &services.Log{Address: v.Address.Hex(), Data: util.BytesToHex(v.Data)}
-			for _, t := range v.Topics {
-				l.Topics = append(l.Topics, t.Hex())
-			}
-			data[tx].Receipts.Logs = append(data[tx].Receipts.Logs, *l)
-		}
 		for _, v := range data {
-			_ = p.ReceiptDistribution(v.Tx, v.Timestamp, v.Receipts)
+			result, err := util.TryReturn(func() (result interface{}, err error) {
+				resp, err := p.Opt.ChainIo.ReceiptLog(v.Tx)
+				if err != nil {
+					time.Sleep(time.Second)
+					return nil, err
+				}
+				return resp, nil
+			}, 10)
+			util.Panic(err)
+			data[v.Tx].Receipts = result.(*services.Receipts)
+			if p.RunBeforePushMiddleware(v.Tx, v.Timestamp, data[v.Tx].Receipts) {
+				_ = p.ReceiptDistribution(v.Tx, v.Timestamp, data[v.Tx].Receipts)
+			}
 		}
-		log.Warn("%s %d-%d block high filter logs %d", p.Chain, startBlock, endBlock, len(data))
+		log.Warn("%s %d-%d block high filter logs %d", p.Opt.Chain, startBlock, endBlock, len(data))
 		startBlock = endBlock
-		p.setCurrentBlockHeightToCache(ctx, p.Chain, startBlock)
 	}
 }
 
-func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
+func (p *Subscribe) WipeBlock(ctx context.Context) error {
 	query := new(ethereum.FilterQuery)
-	for k := range p.ContractsName {
+	for k := range p.Opt.ContractsName {
 		contractsAddress := strings.ToLower(k.String())
 		query.Addresses = append(query.Addresses, common.HexToAddress(contractsAddress))
 	}
@@ -135,13 +133,13 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 	}
 
 	// 先筛选
-	currentBlockNum, _ := p.getCurrentBlockHeightFromCache(ctx, p.Chain)
+	currentBlockNum := p.Opt.GetStartBlock()
 	if currentBlockNum == 0 {
-		currentBlockNum = initBlock
+		currentBlockNum = p.Opt.InitBlock
 	}
 
 	query.FromBlock = big.NewInt(int64(p.filterLogs(ctx, currentBlockNum, client)))
-	log.Debug("%s start subscribe latest block info", p.Chain)
+	log.Debug("%s start subscribe latest block info", p.Opt.Chain)
 	logs := make(chan types.Log)
 
 	sub, err := client.SubscribeFilterLogs(ctx, *query, logs)
@@ -161,10 +159,22 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 			if now-int64(v.Timestamp) < int64(waitTime.Seconds()) {
 				continue
 			}
-			log.Debug("%s push %s %d logs to queue", p.Chain, v.Tx, len(v.Logs))
-			_ = p.ReceiptDistribution(v.Tx, v.Timestamp, v.Receipts)
+			result, err := util.TryReturn(func() (result interface{}, err error) {
+				resp, err := p.Opt.ChainIo.ReceiptLog(v.Tx)
+				if err != nil {
+					time.Sleep(time.Second)
+					return nil, err
+				}
+				return resp, nil
+			}, 10)
+			util.Panic(err)
+			data[key].Receipts = result.(*services.Receipts)
+			log.Debug("%s push %s %d logs to queue", p.Opt.Chain, v.Tx, len(v.Logs))
+			if p.RunBeforePushMiddleware(v.Tx, v.Timestamp, v.Receipts) {
+				_ = p.ReceiptDistribution(v.Tx, v.Timestamp, v.Receipts)
+				p.Opt.SetStartBlock(cast.ToUint64(v.Receipts.BlockNumber))
+			}
 			delete(data, key)
-			p.setCurrentBlockHeightToCache(ctx, p.Chain, cast.ToUint64(v.Receipts.BlockNumber))
 		}
 	}
 
@@ -188,22 +198,10 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 				}
 				b := result.(*types.Block)
 				data[tx] = &Receipts{
-					Receipts: &services.Receipts{
-						Status:      "0x01",
-						ChainSource: p.Chain,
-						Solidity:    true,
-						BlockHash:   vLog.BlockHash.Hex(),
-						BlockNumber: cast.ToString(vLog.BlockNumber),
-					},
 					Tx:        tx,
 					Timestamp: b.Time(),
 				}
 			}
-			l := &services.Log{Address: vLog.Address.Hex(), Data: util.BytesToHex(vLog.Data)}
-			for _, t := range vLog.Topics {
-				l.Topics = append(l.Topics, t.Hex())
-			}
-			data[tx].Receipts.Logs = append(data[tx].Receipts.Logs, *l)
 		case <-t.C:
 			if len(data) <= 0 {
 				continue
@@ -211,12 +209,4 @@ func (p *Subscribe) WipeBlock(ctx context.Context, initBlock uint64) error {
 			push()
 		}
 	}
-}
-
-func (s Subscribe) getCurrentBlockHeightFromCache(ctx context.Context, cacheKey string) (uint64, error) {
-	return redis.Uint64(s.GetCache(ctx)("HGET", "WipeBlock", cacheKey))
-}
-
-func (s Subscribe) setCurrentBlockHeightToCache(ctx context.Context, cacheKey string, value uint64) {
-	_, _ = s.GetCache(ctx)("HSET", "WipeBlock", cacheKey, value)
 }

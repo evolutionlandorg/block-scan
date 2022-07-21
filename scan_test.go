@@ -2,7 +2,6 @@ package block_scan
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -13,11 +12,11 @@ import (
 type MockChainIo struct {
 }
 
-func (m *MockChainIo) ReceiptLog(tx string) (*services.Receipts, error) {
+func (m *MockChainIo) ReceiptLog(_ string) (*services.Receipts, error) {
 	return &services.Receipts{
 		BlockNumber: "1",
 		Logs: []services.Log{
-			services.Log{
+			{
 				Topics:  []string{"awD"},
 				Data:    "111",
 				Address: "222",
@@ -33,7 +32,7 @@ func (m *MockChainIo) BlockNumber() uint64 {
 	return 10
 }
 
-func (m *MockChainIo) FilterTrans(blockNum uint64, filter []string) (txn []string, contracts []string, timestamp uint64, transactionTo []string) {
+func (m *MockChainIo) FilterTrans(blockNum uint64, _ []string) (txn []string, contracts []string, timestamp uint64, transactionTo []string) {
 	if blockNum >= 1 {
 		transactionTo = append(transactionTo, "222")
 		timestamp = 123456789
@@ -44,25 +43,15 @@ func (m *MockChainIo) FilterTrans(blockNum uint64, filter []string) (txn []strin
 	return
 }
 
-func (m *MockChainIo) BlockHeader(blockNum uint64) *services.BlockHeader {
+func (m *MockChainIo) BlockHeader(_ uint64) *services.BlockHeader {
 	return &services.BlockHeader{
 		BlockTimeStamp: 123456789,
 		Hash:           "1",
 	}
 }
 
-func (m *MockChainIo) GetTransactionStatus(tx string) string {
+func (m *MockChainIo) GetTransactionStatus(_ string) string {
 	return "0x01"
-}
-
-type MockRedis struct {
-}
-
-func (m *MockRedis) Do(commandName string, args ...interface{}) (reply interface{}, err error) {
-	if strings.EqualFold(commandName, "hset") {
-		return nil, nil
-	}
-	return 0, nil
 }
 
 type FakeCallback struct {
@@ -71,7 +60,7 @@ type FakeCallback struct {
 	receipt        *services.Receipts
 }
 
-func (f *FakeCallback) FakeCallback(ctx context.Context) error {
+func (f *FakeCallback) FakeCallback(_ context.Context) error {
 	return nil
 }
 
@@ -79,12 +68,13 @@ func TestStartScanChainEvents(t *testing.T) {
 	f := new(FakeCallback)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	assert.NoError(t, StartScanChainEvents(ctx, POLLING, &StartScanChainEventsOptions{
+	assert.NoError(t, StartScanChainEvents(ctx, POLLING, services.ScanEventsOptions{
 		ChainIo: new(MockChainIo),
-		Cache: func(ctx context.Context) services.CacheFunc {
-			return new(MockRedis).Do
+		GetStartBlock: func() uint64 {
+			return 1
 		},
-		Chain: "Crab",
+		SetStartBlock: func(currentBlockNum uint64) {},
+		Chain:         "Crab",
 		ContractsName: map[services.ContractsAddress]services.ContractsName{
 			services.ContractsAddress("222"): services.ContractsName("fake"),
 		},

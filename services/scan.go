@@ -10,6 +10,7 @@ import (
 	"github.com/evolutionlandorg/block-scan/util/log"
 	"github.com/google/uuid"
 	"github.com/itering/go-workers"
+	"github.com/pkg/errors"
 )
 
 type (
@@ -20,6 +21,7 @@ type (
 )
 
 type GetCallbackFunc func(tx string, blockTimestamp uint64, receipt *Receipts) interface{}
+type BeforePushFunc func(tx string, BlockTimestamp uint64, receipt *Receipts) bool
 
 type ChainIo interface {
 	ReceiptLog(tx string) (*Receipts, error)
@@ -58,9 +60,48 @@ type BlockHeader struct {
 	Hash           string
 }
 
+type ScanEventsOptions struct {
+	ChainIo              ChainIo
+	Chain                string
+	ContractsName        map[ContractsAddress]ContractsName
+	SleepTime            time.Duration
+	GetCallbackFunc      GetCallbackFunc
+	CallbackMethodPrefix []string
+	InitBlock            uint64
+	RunForever           bool
+	BeforePushMiddleware []BeforePushFunc
+	GetStartBlock        func() uint64
+	SetStartBlock        func(currentBlockNum uint64)
+}
+
+func (s *ScanEventsOptions) Check() error {
+	if s.ChainIo == nil {
+		return errors.New("chainIo must be not nil")
+	}
+	if s.GetStartBlock == nil {
+		return errors.New("GetStartBlock must be not nil")
+	}
+	if s.SetStartBlock == nil {
+		return errors.New("SetStartBlock must be not nil")
+	}
+	if s.Chain == "" {
+		return errors.New("chain must be not nil")
+	}
+	if len(s.ContractsName) == 0 {
+		return errors.New("contractsName must be not nil")
+	}
+	if s.GetCallbackFunc == nil {
+		return errors.New("getCallbackFunc must be not nil")
+	}
+	if s.SleepTime == 0 {
+		s.SleepTime = time.Second * 5
+	}
+	return nil
+}
+
 type Scan interface {
-	Init(c ChainIo, cache GetCacheFunc, chain string, contractsName map[ContractsAddress]ContractsName, sleepTime time.Duration, getCallbackFunc GetCallbackFunc, callbackMethodPrefix []string) error
-	WipeBlock(ctx context.Context, initBlock uint64) error
+	Init(opt ScanEventsOptions) error
+	WipeBlock(ctx context.Context) error
 }
 
 type FilterBlock struct {

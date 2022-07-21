@@ -8,12 +8,8 @@ import (
 
 	"github.com/evolutionlandorg/block-scan/services"
 	"github.com/evolutionlandorg/block-scan/util"
-
 	"github.com/evolutionlandorg/block-scan/util/log"
-
-	"github.com/garyburd/redigo/redis"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	"github.com/spf13/cast"
 )
 
 var (
@@ -21,14 +17,19 @@ var (
 )
 
 type Polling struct {
-	ContractsName        map[services.ContractsAddress]services.ContractsName
-	CallbackMethodPrefix []string
-	GetCache             services.GetCacheFunc
-	ChainIo              services.ChainIo
-	Chain                string
-	// Deprecated 推荐使用 环境变量 BLOCK_POLLING_SLEEP_TIME
-	SleepTime       time.Duration
-	GetCallbackFunc services.GetCallbackFunc
+	Opt services.ScanEventsOptions
+}
+
+func (p *Polling) RunBeforePushMiddleware(tx string, BlockTimestamp uint64, receipt *services.Receipts) bool {
+	for _, v := range p.Opt.BeforePushMiddleware {
+		if v == nil {
+			continue
+		}
+		if !v(tx, BlockTimestamp, receipt) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt *services.Receipts) error {
@@ -53,7 +54,7 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 		Txid:           tx,
 		Receipts:       receipt,
 		BlockTimestamp: BlockTimestamp,
-		Callback:       p.GetCallbackFunc(tx, BlockTimestamp, receipt),
+		Callback:       p.Opt.GetCallbackFunc(tx, BlockTimestamp, receipt),
 	}
 
 	for _, l := range receipt.Logs {
@@ -62,35 +63,26 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 			continue
 		}
 		exist[eventAddress] = struct{}{}
-		if p.ContractsName[services.ContractsAddress(eventAddress)] != "" {
-			contractName := strings.ToLower(p.ContractsName[services.ContractsAddress(eventAddress)].String())
-			for _, v := range p.CallbackMethodPrefix {
+		if p.Opt.ContractsName[services.ContractsAddress(eventAddress)] != "" {
+			contractName := strings.ToLower(p.Opt.ContractsName[services.ContractsAddress(eventAddress)].String())
+			for _, v := range p.Opt.CallbackMethodPrefix {
 				if strings.EqualFold(v, contractName) {
 					fb.ContractName = v
 					_ = fb.Do()
 					break
 				}
 			}
-
 		}
 	}
 	return nil
 }
 
-func (p *Polling) Init(c services.ChainIo, cache services.GetCacheFunc, chain string,
-	contractsName map[services.ContractsAddress]services.ContractsName, sleepTime time.Duration,
-	getCallbackFunc services.GetCallbackFunc, callbackMethodPrefix []string) error {
-	p.GetCache = cache
-	p.ContractsName = contractsName
-	p.Chain = chain
-	p.SleepTime = sleepTime
-	p.GetCallbackFunc = getCallbackFunc
-	p.ChainIo = c
-	p.CallbackMethodPrefix = callbackMethodPrefix
-	return nil
+func (p *Polling) Init(opt services.ScanEventsOptions) error {
+	p.Opt = opt
+	return opt.Check()
 }
 
-func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
+func (p *Polling) WipeBlock(ctx context.Context) error {
 	go func() {
 		for {
 			select {
@@ -98,26 +90,28 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 				return
 			case txn := <-newTxn:
 				// check Transaction fail
-				if status := p.ChainIo.GetTransactionStatus(txn.Tx); status == "Fail" {
+				if status := p.Opt.ChainIo.GetTransactionStatus(txn.Tx); status == "Fail" {
 					continue
 				}
-				receipt, _ := p.ChainIo.ReceiptLog(txn.Tx)
+				receipt, _ := p.Opt.ChainIo.ReceiptLog(txn.Tx)
 				// maybe network abnormal or confirmed delay
 				if receipt == nil || len(receipt.Logs) == 0 {
 					newTxn <- txn
 					continue
 				}
-				_ = p.ReceiptDistribution(txn.Tx, txn.BlockTimestamp, receipt)
+				if p.RunBeforePushMiddleware(txn.Tx, txn.BlockTimestamp, receipt) {
+					_ = p.ReceiptDistribution(txn.Tx, txn.BlockTimestamp, receipt)
+					p.Opt.SetStartBlock(cast.ToUint64(receipt.BlockNumber))
+				}
 			}
 		}
 	}()
-	log.Debug("start %s wipeBlock", p.Chain)
+	log.Debug("start %s wipeBlock", p.Opt.Chain)
 	var (
 		currentBlockNum uint64
-		ticker          = time.NewTicker(time.Second)
 		filterContracts []string
 	)
-	for k := range p.ContractsName {
+	for k := range p.Opt.ContractsName {
 		filterContracts = append(filterContracts, k.String())
 	}
 	sleepTime := util.GetSleepTime()
@@ -125,42 +119,37 @@ func (p *Polling) WipeBlock(ctx context.Context, initBlock uint64) error {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		default:
 		}
-		span, spanCtx := tracer.StartSpanFromContext(ctx, "daemons.worker",
-			tracer.ServiceName("evo-pvp-worker"),
-			tracer.SpanType(ext.SpanTypeMessageConsumer),
-			tracer.Measured(),
-			tracer.Tag("worker-name", "WipeBlock"),
-			tracer.Tag("Chain", p.Chain),
-		)
 
-		chainCurrentBlockNum := p.ChainIo.BlockNumber()
+		chainCurrentBlockNum := p.Opt.ChainIo.BlockNumber()
 		if chainCurrentBlockNum == 0 {
-			span.Finish()
 			continue
 		}
-		currentBlockNum, _ = redis.Uint64(p.GetCache(spanCtx)("HGET", "WipeBlock", p.Chain))
 		if currentBlockNum <= 0 {
-			currentBlockNum = initBlock
+			currentBlockNum = p.Opt.GetStartBlock()
+		}
+		if currentBlockNum <= 0 {
+			currentBlockNum = p.Opt.InitBlock
 		}
 
 		if currentBlockNum < chainCurrentBlockNum {
 			for i := currentBlockNum + 1; i <= chainCurrentBlockNum; i++ {
-				txIDs, contracts, blockTimeStamp, transactionTo := p.ChainIo.FilterTrans(uint64(i), filterContracts)
+				txIDs, contracts, blockTimeStamp, transactionTo := p.Opt.ChainIo.FilterTrans(uint64(i), filterContracts)
+				if i%100 == 0 && len(txIDs) == 0 {
+					log.Debug("scan %s current block %d", p.Opt.Chain, i)
+					continue
+				}
 				if len(txIDs) == 0 {
 					continue
 				}
-				log.Debug("%s find tx id %v; transaction contracts %v", p.Chain, txIDs, transactionTo)
+				log.Debug("%s %d find tx id %v; transaction contracts %v", p.Opt.Chain, i, txIDs, transactionTo)
 				for index, txID := range txIDs {
 					newTxn <- services.Tnx{Tx: txID, BlockTimestamp: blockTimeStamp, Contract: contracts[index]}
 				}
 			}
-
 			currentBlockNum = chainCurrentBlockNum
-			_, _ = p.GetCache(spanCtx)("HSET", "WipeBlock", p.Chain, currentBlockNum)
 		}
-		span.Finish()
 		time.Sleep(sleepTime)
 	}
 }

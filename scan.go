@@ -2,7 +2,6 @@ package block_scan
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/evolutionlandorg/block-scan/scan"
@@ -19,41 +18,7 @@ var (
 	POLLING   ScanType = "polling"
 )
 
-type StartScanChainEventsOptions struct {
-	ChainIo              services.ChainIo
-	Cache                services.GetCacheFunc
-	Chain                string
-	ContractsName        map[services.ContractsAddress]services.ContractsName
-	SleepTime            time.Duration
-	GetCallbackFunc      services.GetCallbackFunc
-	CallbackMethodPrefix []string
-	InitBlock            uint64
-	RunForever           bool
-}
-
-func (s *StartScanChainEventsOptions) Check() error {
-	if s.ChainIo == nil {
-		return errors.New("chainIo must be not nil")
-	}
-	if s.Cache == nil {
-		return errors.New("cache must be not nil")
-	}
-	if s.Chain == "" {
-		return errors.New("chain must be not nil")
-	}
-	if len(s.ContractsName) == 0 {
-		return errors.New("contractsName must be not nil")
-	}
-	if s.GetCallbackFunc == nil {
-		return errors.New("getCallbackFunc must be not nil")
-	}
-	if s.SleepTime == 0 {
-		s.SleepTime = time.Second * 5
-	}
-	return nil
-}
-
-func StartScanChainEvents(ctx context.Context, scanType ScanType, opt *StartScanChainEventsOptions) error {
+func StartScanChainEvents(ctx context.Context, scanType ScanType, opt services.ScanEventsOptions) error {
 	var instance services.Scan
 	switch scanType {
 	case SUBSCRIBE:
@@ -66,9 +31,11 @@ func StartScanChainEvents(ctx context.Context, scanType ScanType, opt *StartScan
 	if err := opt.Check(); err != nil {
 		return err
 	}
-	if err := instance.Init(opt.ChainIo, opt.Cache, opt.Chain, opt.ContractsName, opt.SleepTime, opt.GetCallbackFunc, opt.CallbackMethodPrefix); err != nil {
+
+	if err := instance.Init(opt); err != nil {
 		return err
 	}
+
 	if opt.RunForever {
 		defer func() {
 			if err := recover(); err != nil {
@@ -77,8 +44,8 @@ func StartScanChainEvents(ctx context.Context, scanType ScanType, opt *StartScan
 				_ = StartScanChainEvents(ctx, scanType, opt)
 			}
 		}()
-		util.Panic(instance.WipeBlock(ctx, opt.InitBlock))
+		util.Panic(instance.WipeBlock(ctx))
 		return nil
 	}
-	return instance.WipeBlock(ctx, opt.InitBlock)
+	return instance.WipeBlock(ctx)
 }

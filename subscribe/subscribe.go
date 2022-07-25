@@ -45,12 +45,38 @@ func (p *Subscribe) Init(opt services.ScanEventsOptions) error {
 	return p.Polling.Init(opt)
 }
 
-func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *ethclient.Client) uint64 {
+func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *ethclient.Client) {
 	query := new(ethereum.FilterQuery)
 	for k := range p.Opt.ContractsName {
 		contractsAddress := strings.ToLower(k.String())
 		query.Addresses = append(query.Addresses, common.HexToAddress(contractsAddress))
 	}
+	var (
+		data = make(map[string]*Receipts)
+	)
+	push := func() {
+		for _, v := range data {
+			result, err := util.TryReturn(func() (result interface{}, err error) {
+				resp, err := p.Opt.ChainIo.ReceiptLog(v.Tx)
+				if err != nil {
+					time.Sleep(time.Second)
+					return nil, err
+				}
+				return resp, nil
+			}, 10)
+			util.Panic(err)
+			data[v.Tx].Receipts = result.(*services.Receipts)
+			if data[v.Tx].Receipts == nil || len(data[v.Tx].Receipts.Logs) == 0 {
+				continue
+			}
+			if p.RunBeforePushMiddleware(v.Tx, v.Timestamp, data[v.Tx].Receipts) {
+				_ = p.ReceiptDistribution(v.Tx, v.Timestamp, data[v.Tx].Receipts)
+				p.Opt.SetStartBlock(cast.ToUint64(v.Receipts.BlockNumber))
+			}
+			delete(data, v.Tx)
+		}
+	}
+
 	for {
 		endBlock, _ := client.BlockNumber(context.Background())
 		if endBlock == 0 {
@@ -58,7 +84,7 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 			continue
 		}
 		if endBlock <= startBlock {
-			return endBlock
+			break
 		}
 
 		if endBlock-startBlock >= 500 {
@@ -75,7 +101,6 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 		}
 
 		var (
-			data        = make(map[string]*Receipts)
 			blockNumber = make(map[uint64]uint64)
 		)
 
@@ -99,26 +124,14 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 				}
 			}
 		}
-
-		for _, v := range data {
-			result, err := util.TryReturn(func() (result interface{}, err error) {
-				resp, err := p.Opt.ChainIo.ReceiptLog(v.Tx)
-				if err != nil {
-					time.Sleep(time.Second)
-					return nil, err
-				}
-				return resp, nil
-			}, 10)
-			util.Panic(err)
-			data[v.Tx].Receipts = result.(*services.Receipts)
-			if p.RunBeforePushMiddleware(v.Tx, v.Timestamp, data[v.Tx].Receipts) {
-				_ = p.ReceiptDistribution(v.Tx, v.Timestamp, data[v.Tx].Receipts)
-				p.Opt.SetStartBlock(cast.ToUint64(v.Receipts.BlockNumber))
-			}
-		}
-		log.Warn("%s %d-%d block high filter logs %d", p.Opt.Chain, startBlock, endBlock, len(data))
+		push()
+		log.Debug("%s %d-%d block high filter logs %d", p.Opt.Chain, startBlock, endBlock, len(data))
 		startBlock = endBlock
 	}
+	for len(data) > 0 {
+		push()
+	}
+	return
 }
 
 func (p *Subscribe) WipeBlock(ctx context.Context) error {
@@ -139,10 +152,10 @@ func (p *Subscribe) WipeBlock(ctx context.Context) error {
 		currentBlockNum = p.Opt.InitBlock
 	}
 
-	query.FromBlock = big.NewInt(int64(p.filterLogs(ctx, currentBlockNum, client)))
+	p.filterLogs(ctx, currentBlockNum, client)
 	log.Debug("%s start subscribe latest block info", p.Opt.Chain)
-	logs := make(chan types.Log)
 
+	logs := make(chan types.Log)
 	sub, err := client.SubscribeFilterLogs(ctx, *query, logs)
 	if err != nil {
 		return err
@@ -170,6 +183,9 @@ func (p *Subscribe) WipeBlock(ctx context.Context) error {
 			}, 10)
 			util.Panic(err)
 			data[key].Receipts = result.(*services.Receipts)
+			if data[v.Tx].Receipts == nil || len(data[v.Tx].Receipts.Logs) == 0 {
+				continue
+			}
 			log.Debug("%s push %s %d logs to queue", p.Opt.Chain, v.Tx, len(v.Logs))
 			if p.RunBeforePushMiddleware(v.Tx, v.Timestamp, v.Receipts) {
 				_ = p.ReceiptDistribution(v.Tx, v.Timestamp, v.Receipts)

@@ -3,6 +3,7 @@ package subscribe
 import (
 	"context"
 	"fmt"
+	"github.com/evolutionlandorg/block-scan/metrics"
 	"math/big"
 	"os"
 	"strings"
@@ -30,7 +31,12 @@ type Receipts struct {
 
 type Subscribe struct {
 	*scan.Polling
-	wss string
+	metrics metrics.Metrics
+	wss     string
+}
+
+func (p *Subscribe) SetMetrics(metrics metrics.Metrics) {
+	p.metrics = metrics
 }
 
 func (p *Subscribe) Init(opt services.ScanEventsOptions) error {
@@ -94,7 +100,6 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 		query.FromBlock = big.NewInt(int64(startBlock))
 		query.ToBlock = big.NewInt(int64(endBlock))
 		rawLogs, err := client.FilterLogs(ctx, *query)
-
 		if err != nil {
 			log.Warn("%s FilterLogs error: %v. trying again.", p.Opt.Chain, err)
 			continue
@@ -122,6 +127,7 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 					Timestamp:   blockNumber[v.BlockNumber],
 					BlockNumber: v.BlockNumber,
 				}
+				p.metrics.ScanTxTotal(p.Opt.Chain)
 			}
 		}
 		push()
@@ -218,6 +224,7 @@ func (p *Subscribe) WipeBlock(ctx context.Context) error {
 					Tx:        tx,
 					Timestamp: b.Time(),
 				}
+				p.metrics.ScanTxTotal(p.Opt.Chain, 1)
 			}
 		case <-t.C:
 			if len(data) <= 0 {

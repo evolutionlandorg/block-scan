@@ -2,6 +2,7 @@ package block_scan
 
 import (
 	"context"
+	"github.com/evolutionlandorg/block-scan/metrics"
 	"time"
 
 	"github.com/evolutionlandorg/block-scan/scan"
@@ -28,6 +29,7 @@ func StartScanChainEvents(ctx context.Context, scanType ScanType, opt services.S
 	default:
 		log.Panic("not implement '%s' type", scanType)
 	}
+	instance.SetMetrics(metrics.NewMetrics(metrics.Type(util.GetEnv("METRICS_TYPE", "fake"))))
 	if err := opt.Check(); err != nil {
 		return err
 	}

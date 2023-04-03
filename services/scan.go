@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"github.com/evolutionlandorg/block-scan/metrics"
 	"reflect"
 	"strings"
 	"time"
@@ -102,6 +103,7 @@ func (s *ScanEventsOptions) Check() error {
 type Scan interface {
 	Init(opt ScanEventsOptions) error
 	WipeBlock(ctx context.Context) error
+	SetMetrics(metrics metrics.Metrics)
 }
 
 type FilterBlock struct {

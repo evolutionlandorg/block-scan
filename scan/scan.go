@@ -3,6 +3,7 @@ package scan
 import (
 	"context"
 	"fmt"
+	"github.com/evolutionlandorg/block-scan/metrics"
 	"strings"
 	"time"
 
@@ -17,7 +18,12 @@ var (
 )
 
 type Polling struct {
-	Opt services.ScanEventsOptions
+	Opt     services.ScanEventsOptions
+	metrics metrics.Metrics
+}
+
+func (p *Polling) SetMetrics(metrics metrics.Metrics) {
+	p.metrics = metrics
 }
 
 func (p *Polling) RunBeforePushMiddleware(tx string, BlockTimestamp uint64, receipt *services.Receipts) bool {
@@ -68,6 +74,7 @@ func (p *Polling) ReceiptDistribution(tx string, BlockTimestamp uint64, receipt 
 			for _, v := range p.Opt.CallbackMethodPrefix {
 				if strings.EqualFold(v, contractName) {
 					fb.ContractName = v
+					p.metrics.ScanCallbackTotal(v)
 					_ = fb.Do()
 					break
 				}
@@ -99,6 +106,7 @@ func (p *Polling) WipeBlock(ctx context.Context) error {
 					newTxn <- txn
 					continue
 				}
+				p.metrics.ScanTxTotal(p.Opt.Chain)
 				if p.RunBeforePushMiddleware(txn.Tx, txn.BlockTimestamp, receipt) {
 					_ = p.ReceiptDistribution(txn.Tx, txn.BlockTimestamp, receipt)
 					p.Opt.SetStartBlock(cast.ToUint64(receipt.BlockNumber))

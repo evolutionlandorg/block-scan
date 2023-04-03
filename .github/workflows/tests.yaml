@@ -12,10 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-#      - name: golangci-lint # bug:Can't run linter goanalysis_metalinter: buildir: failed to load package : could not load export data: no export data for \"golang.org/x/sync/errgroup\"
-#        uses: golangci/golangci-lint-action@v2
-#        with:
-#          args: --timeout 3m
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          args: --timeout 3m
       - name: set golang
         uses: actions/setup-go@v3
         with:

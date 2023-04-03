@@ -137,7 +137,6 @@ func (p *Subscribe) filterLogs(ctx context.Context, startBlock uint64, client *e
 	for len(data) > 0 {
 		push()
 	}
-	return
 }
 
 func (p *Subscribe) WipeBlock(ctx context.Context) error {

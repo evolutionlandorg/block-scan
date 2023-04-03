@@ -16,7 +16,6 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         with:
           args: --timeout 3m
-          version: v1.46.0
       - name: set golang
         uses: actions/setup-go@v3
         with:

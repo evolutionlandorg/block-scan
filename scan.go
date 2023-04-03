@@ -29,7 +29,7 @@ func StartScanChainEvents(ctx context.Context, scanType ScanType, opt services.S
 	default:
 		log.Panic("not implement '%s' type", scanType)
 	}
-	instance.SetMetrics(metrics.NewMetrics(metrics.Type(util.GetEnv("METRICS_TYPE", "fake"))))
+	instance.SetMetrics(metrics.NewMetrics())
 	if err := opt.Check(); err != nil {
 		return err
 	}

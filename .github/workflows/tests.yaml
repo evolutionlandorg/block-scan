@@ -17,12 +17,9 @@ jobs:
         with:
           args: --timeout 3m
       - name: set golang
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.17.11
-      - name: Set GOROOT
-        run: |
-          echo "GOROOT=$GOROOT_1_17_X64" >> $GITHUB_ENV
+          go-version-file: go.mod
       - name: Install dependencies
         run: go mod download
 

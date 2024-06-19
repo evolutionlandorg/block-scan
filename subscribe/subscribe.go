@@ -3,6 +3,7 @@ package subscribe
 import (
 	"context"
 	"fmt"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/evolutionlandorg/block-scan/metrics"
 	"math/big"
 	"os"
@@ -13,8 +14,6 @@ import (
 	"github.com/evolutionlandorg/block-scan/services"
 	"github.com/evolutionlandorg/block-scan/util"
 	"github.com/evolutionlandorg/block-scan/util/log"
-
-	"github.com/evolutionlandorg/block-scan/util/ethclient"
 
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
